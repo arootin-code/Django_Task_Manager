@@ -1,0 +1,43 @@
+{% extends "jobs/base.html" %}
+{% load static %}
+{% block title %}New Task - Task Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="mb-4">New Task</h3>
+
+                <div id="error-box" class="alert alert-danger d-none"></div>
+
+                <form id="task-form">
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input type="text" class="form-control" id="title" required maxlength="255">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description (optional)</label>
+                        <textarea class="form-control" id="description" rows="4"></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Create Task</button>
+                        <a href="/tasks-ui/" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'jobs/js/api.js' %}"></script>
+<script src="{% static 'jobs/js/tasks.js' %}"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        requireAuth();
+        document.getElementById("task-form").addEventListener("submit", createTask);
+    });
+</script>
+{% endblock %}

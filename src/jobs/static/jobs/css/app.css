@@ -1,0 +1,22 @@
+body {
+    min-height: 100vh;
+}
+
+.task-card {
+    transition: transform 0.15s ease;
+}
+
+.task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.auth-card {
+    max-width: 420px;
+    margin: 3rem auto;
+}

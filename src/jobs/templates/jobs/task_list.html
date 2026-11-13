@@ -1,0 +1,26 @@
+{% extends "jobs/base.html" %}
+{% load static %}
+{% block title %}My Tasks - Task Manager{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">My Tasks</h2>
+    <a href="/tasks-ui/new/" class="btn btn-primary">+ New Task</a>
+</div>
+
+<div id="empty-box" class="text-center text-muted py-5 d-none">
+    <h5>No tasks yet</h5>
+    <p>Click "New Task" to create your first one.</p>
+</div>
+
+<div id="tasks-container" class="row g-3"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'jobs/js/api.js' %}"></script>
+<script src="{% static 'jobs/js/tasks.js' %}"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", loadTasks);
+</script>
+{% endblock %}

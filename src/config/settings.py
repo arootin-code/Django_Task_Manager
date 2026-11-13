@@ -7,6 +7,7 @@ the same code runs locally and in Docker without changes.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +25,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # third-party
     "rest_framework",
+    "rest_framework_simplejwt",
     "django_celery_results",
     # local
     "notifications",
+    "jobs",  
 ]
 
 MIDDLEWARE = [
@@ -106,7 +109,22 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── DRF ───────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
+# ── SimpleJWT ────────────────────────────────────────────────────
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": False,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # ── Email — smtp4dev ──────────────────────────────────────────────
@@ -146,5 +164,9 @@ CELERY_BEAT_SCHEDULE = {
     "cleanup-old-task-results-every-minute": {
         "task": "notifications.tasks.cleanup_old_task_results",
         "schedule": 60.0,  # seconds — frequent on purpose, so it's visible quickly in Flower/logs
+    },
+        "send-reminders-for-stale-tasks-every-minute": {
+        "task": "jobs.tasks.send_reminder_for_stale_tasks",
+        "schedule": 60.0,  # برای تست ۱ دقیقه؛ در production مثلاً 3600 (۱ ساعت)
     },
 }

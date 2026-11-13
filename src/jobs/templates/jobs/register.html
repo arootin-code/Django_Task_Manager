@@ -1,0 +1,69 @@
+{% extends "jobs/base.html" %}
+{% load static %}
+{% block title %}Register - Task Manager{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <h3 class="card-title text-center mb-4">Register</h3>
+
+            <div id="error-box" class="alert alert-danger d-none"></div>
+
+            <form id="register-form">
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" minlength="8" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100">Create Account</button>
+            </form>
+
+            <p class="text-center mt-3 mb-0 small">
+                Already have an account? <a href="/login/">Login</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("register-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("error-box");
+    errorBox.classList.add("d-none");
+
+    const username = document.getElementById("username").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    try {
+        const res = await fetch("/register/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, email, password }),
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const msg = data.detail || Object.values(data).flat().join(" ") || "Registration failed";
+            throw new Error(msg);
+        }
+
+        alert("Account created! Please login.");
+        window.location.href = "/login/";
+    } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.remove("d-none");
+    }
+});
+</script>
+{% endblock %}

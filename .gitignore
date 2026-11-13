@@ -1,24 +1,26 @@
+# Environment
+.env
+.env.*
+
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Django
+staticfiles/
+media/
 *.sqlite3
 
-# Virtual environment
-.venv/
-venv/
-
-# Environment secrets
-.env
-
-# Docker
-*.log
+# Celery
+celerybeat-schedule*
 
 # IDE
 .vscode/
 .idea/
-
-# Static
-staticfiles/
+*.swp
 
 # OS
-.DS_Storeيي
+.DS_Store
+Thumbs.dbsrc/celerybeat-schedule

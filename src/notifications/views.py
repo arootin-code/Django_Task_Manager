@@ -2,13 +2,14 @@ from celery.result import AsyncResult
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.permissions import AllowAny
 from config.celery import app as celery_app
 from notifications.serializers import RegisterSerializer
 from notifications.tasks import send_welcome_email
 
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
     """
     POST /api/register/
 

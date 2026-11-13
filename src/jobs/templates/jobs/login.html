@@ -1,0 +1,64 @@
+{% extends "jobs/base.html" %}
+{% load static %}
+{% block title %}Login - Task Manager{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <h3 class="card-title text-center mb-4">Login</h3>
+
+            <div id="error-box" class="alert alert-danger d-none"></div>
+
+            <form id="login-form">
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Login</button>
+            </form>
+
+            <p class="text-center mt-3 mb-0 small">
+                No account? <a href="/sign_up/">Register</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("error-box");
+    errorBox.classList.add("d-none");
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+        const res = await fetch("/api/auth/login/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || "Login failed");
+        }
+
+        const data = await res.json();
+        setTokens(data.access, data.refresh, username);
+        window.location.href = "/tasks-ui/";
+    } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.remove("d-none");
+    }
+});
+</script>
+{% endblock %}
