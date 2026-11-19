@@ -1,547 +1,563 @@
-#  Celery + Django REST Framework + Redis + smtp4dev + PostgreSQL + test Performance
+# Celery + Django REST Framework + Redis + smtp4dev + PostgreSQL + Task Manager
 
-یک پروژه آموزشی و عملی برای نمایش معماری **Async Task Processing** در Django است.
+A practical project demonstrating **Async Task Processing** architecture in Django, extended into a real **Task Manager** application.
 
-در این پروژه یک سناریوی واقعی پیاده‌سازی شده است:
+In this project a real scenario is implemented:
 
-کاربر از طریق API ثبت‌نام می‌کند، Django درخواست را سریع پاسخ می‌دهد، سپس ارسال ایمیل بدون منتظر نگه داشتن کاربر در پس‌زمینه توسط **Celery Worker** انجام می‌شود.
+The user registers through the API, Django responds quickly, then the welcome email is sent in the background by a **Celery Worker** without keeping the user waiting.
 
-در این معماری از ابزارهای واقعی Production استفاده شده است:
+A scheduled Celery Beat task also sends reminder emails for tasks that remain pending for more than 24 hours.
 
-* Django REST Framework برای ساخت API
-* Nginx به عنوان Reverse Proxy
-* Gunicorn برای اجرای Django در محیط Production
-* PostgreSQL برای ذخیره اطلاعات
-* Redis به عنوان Message Broker
-* Celery برای اجرای Taskهای پس‌زمینه
-* Celery Beat برای اجرای Taskهای زمان‌بندی شده
-* smtp4dev برای شبیه‌سازی سرویس ایمیل
-* Flower برای مانیتورینگ Celery
-* Locust برای تست فشار و Load Testing
+The following real production tools are used:
+
+* Django REST Framework for building the API
+* Nginx as Reverse Proxy
+* Gunicorn for running Django in production
+* PostgreSQL for data storage
+* Redis as Message Broker
+* Celery for background tasks
+* Celery Beat for scheduled tasks
+* smtp4dev for email simulation
+* Flower for Celery monitoring
+* Locust for load testing
+* SimpleJWT for JWT authentication
+* Bootstrap (local) for the web UI
 
 ---
 
-#  هدف پروژه
+# Project Goal
 
-هدف این پروژه آموزش چرخه کامل یک درخواست Async در Django است:
-
-```
+The goal of this project is to teach the full lifecycle of an async request in Django:
 User Request
-      |
-      ▼
- Django API
-      |
-      |
-      ├── ذخیره اطلاعات در PostgreSQL
-      |
-      └── ارسال Task به Redis
-                    |
-                    ▼
-              Celery Worker
-                    |
-                    ▼
-              ارسال Email
-                    |
-                    ▼
-                smtp4dev
+|
+▼
+Django API
+|
+├── Save data to PostgreSQL
+|
+└── Send Task to Redis
+|
+▼
+Celery Worker
+|
+▼
+Send Email
+|
+▼
+smtp4dev
+
 ```
 
-کاربر نباید منتظر عملیات سنگین مثل ارسال ایمیل بماند.
+The user should not wait for heavy operations like sending email.
 
-Django فقط Task را ایجاد می‌کند و Worker در پس‌زمینه کار را انجام می‌دهد.
+Django only creates the Task and the Worker does the work in the background.
 
 ---
 
-#  معماری سیستم
+# System Architecture
+Browser / curl / Locust
 
-```
-                  Browser / curl / Locust
+|
+▼
 
-                          |
-                          |
-                          ▼
+Nginx :80
 
-                    Nginx :80
+|
+▼
 
-                          |
-                          |
-                          ▼
+Gunicorn
 
-                     Gunicorn
+|
+▼
 
-                          |
-                          |
-                          ▼
+Django REST Framework
 
-              Django REST Framework
+      /    \
 
-                    /              \
+      /    \
 
-                   /                \
+      ▼     ▼
 
-                  ▼                  ▼
+PostgreSQL Redis
 
+Users + TaskResult Message Broker
 
-           PostgreSQL             Redis
+|
+▼
 
-        Users + TaskResult       Message Broker
+Celery Worker
 
-                                      |
-                                      |
-                                      ▼
+|
+▼
 
-                              Celery Worker
+smtp4dev
 
-                                      |
-                                      |
-                                      ▼
+▲
 
-                                smtp4dev
+|
 
+Celery Beat
 
-                                      ▲
+|
 
-                                      |
+Periodic Tasks
 
-                              Celery Beat
+Flower :5555
 
-
-                                      |
-
-                              Periodic Tasks
-
-
-
-                         Flower :5555
-
-                      Celery Monitoring
+Celery Monitoring
 
 ```
 
 ---
 
-#  جریان کامل یک درخواست
+# Full Request Flow
 
-## 1. ثبت نام کاربر
+## 1. User Registration
 
-کاربر درخواست زیر را ارسال می‌کند:
+The user sends:
+POST /register/
 
 ```
-POST /api/register/
-```
 
-مثال:
+Example:
 
 ```json
 {
  "username": "Jamall",
- "email": "devops523@gmali.com",
+ "email": "devops523@gmail.com",
  "password": "12345678"
 }
+2. Django Processes the Request
 ```
-
----
-
-## 2. Django درخواست را پردازش می‌کند
-
 Django:
 
-* اطلاعات را Validate می‌کند
-* User را در PostgreSQL ذخیره می‌کند
-* یک Celery Task ایجاد می‌کند
+Validates the input
 
-مثلا:
+Saves the User in PostgreSQL
+
+Creates a Celery Task
+
+Example:
 
 ```
 send_welcome_email()
-```
-
----
-
-## 3. ارسال Task به Redis
-
-Redis مانند یک صف پیام عمل می‌کند:
+3. Task Sent to Redis
+Redis acts as a message queue:
 
 ```
 Redis Queue
 
-
 [
    send_welcome_email(task_id=123)
 ]
-
-```
-
----
-
-## 4. Celery Worker Task را دریافت می‌کند
-
+4. Celery Worker Receives the Task
 Worker:
 
 ```
 Receive Task
-
         |
-
 Execute Business Logic
-
         |
-
 Send Email
+5. Email Sending
+For development, smtp4dev is used.
 
-```
-
----
-
-## 5. ارسال ایمیل
-
-برای محیط Development از smtp4dev استفاده شده است.
-
-ایمیل واقعی ارسال نمی‌شود.
-
-در عوض داخل Web UI نمایش داده می‌شود.
-
-آدرس:
+No real email is sent. Instead it is shown in the Web UI at:
 
 ```
 http://localhost:5000
-```
-
----
-
-## 6. ذخیره نتیجه Task
-
-نتیجه اجرای Task در PostgreSQL ذخیره می‌شود:
+6. Task Result Storage
+The task result is saved in PostgreSQL:
 
 ```
 TaskResult
-
 status = SUCCESS
-```
+This information is visible through:
 
-این اطلاعات توسط:
+API
 
-* API
-* Flower
-* سیستم مانیتورینگ
+Flower
 
-قابل مشاهده است.
+Monitoring system
 
----
+Original Features (before my changes)
+The base project already provided:
 
-#  سرویس‌های پروژه
+POST /register/ - creates a user and dispatches a welcome email asynchronously
 
-| سرویس         | وظیفه                        |
-| ------------- | ---------------------------- |
-| Django        | ساخت API و مدیریت درخواست‌ها |
-| Nginx         | Reverse Proxy                |
-| Gunicorn      | اجرای Django Worker          |
-| PostgreSQL    | Database اصلی                |
-| Redis         | Message Broker               |
-| Celery Worker | اجرای Taskهای Async          |
-| Celery Beat   | اجرای Taskهای زمان‌بندی شده  |
-| smtp4dev      | تست ایمیل                    |
-| Flower        | مانیتورینگ Celery            |
-| Locust        | تست فشار API                 |
+GET /tasks/<task_id>/ - polls a Celery task's status (backed by django-db result backend)
 
----
+send_welcome_email Celery task with retry + exponential backoff
 
-#  اجرای پروژه
+cleanup_old_task_results periodic task (Celery Beat)
 
-ابتدا فایل تنظیمات محیطی را بسازید:
+Docker Compose stack with Nginx, Gunicorn, PostgreSQL, Redis, Flower, smtp4dev
 
-```bash
+Four New Features
+Feature 1 - Task CRUD with per-user isolation
+Goal: allow authenticated users to create, list, update, and delete their own tasks.
+
+Model: jobs.models.Task (title, description, status, created_at, finished_at, reminder_sent, user FK).
+
+Endpoints:
+
+GET/POST /api/tasks/
+
+GET/PUT/PATCH/DELETE /api/tasks/{id}/
+
+Access control: get_queryset() filters by request.user; perform_create() sets user=request.user. A user can never see or modify another user's tasks.
+
+Tests: TaskCRUDTests (3 tests).
+
+Feature 2 - JWT Authentication
+Goal: stateless authentication for the API.
+
+Endpoints:
+
+POST /api/auth/login/ - returns access and refresh tokens
+
+POST /api/auth/refresh/ - returns a new access token
+
+Default permission: IsAuthenticated (set globally in settings.REST_FRAMEWORK).
+
+Tests: JWTAuthTests (3 tests), including a check that unauthenticated requests return 401.
+
+Feature 3 - Async Email Notifications on Complete / Fail
+Goal: notify the user asynchronously when a task is completed or failed.
+
+Endpoints:
+
+POST /api/tasks/{id}/complete/ - sets status=SUCCESS, finished_at=now(), dispatches send_success_email.delay(...)
+
+POST /api/tasks/{id}/fail/ - sets status=FAILED, dispatches send_failure_email.delay(...)
+
+Celery tasks: jobs.tasks.send_success_email, jobs.tasks.send_failure_email (retry + exponential backoff, same pattern as the base project's send_welcome_email).
+
+Tests: CeleryEmailTests (3 tests) using unittest.mock.patch on .delay to verify dispatch without hitting SMTP.
+
+Feature 4 - 24-Hour Reminder via Celery Beat
+Goal: automatically remind users of tasks that have been pending for more than 24 hours.
+
+Task: jobs.tasks.send_reminder_for_stale_tasks - queries Task.objects.filter(status=PENDING, reminder_sent=False, created_at__lt=now-24h) and sends one email per task, then sets reminder_sent=True.
+
+Scheduling: CELERY_BEAT_SCHEDULE runs it every 60 seconds (production value would be 3600).
+
+Optimization: select_related("user") avoids N+1 queries.
+
+Tests: ReminderTests (3 tests) - covers the happy path, the "too new" case, and the "already reminded" case.
+
+Project Services
+Service	Responsibility
+Django	Build API and handle requests
+Nginx	Reverse Proxy
+Gunicorn	Run Django workers
+PostgreSQL	Main Database
+Redis	Message Broker
+Celery Worker	Run async tasks
+Celery Beat	Run scheduled tasks
+smtp4dev	Email testing
+Flower	Celery monitoring
+Locust	API load testing
+Running the Project
+First, create the environment file:
+
+bash
 cp .env.example .env
-```
+Then:
 
-سپس:
-
-```bash
+bash
 docker compose up --build
-```
+Check status:
 
-بررسی وضعیت:
-
-```bash
+bash
 docker compose ps
-```
+All services should be Running.
 
-باید تمام سرویس‌ها Running باشند.
+Service URLs
+Service	URL
+Django API	http://localhost
+smtp4dev	http://localhost:5000
+Flower	http://localhost:5555/flower/
+Locust	http://localhost:8089
+Manual Testing
+Register a user:
 
----
-
-#  آدرس سرویس‌ها
-
-| سرویس      | آدرس                                                           |
-| ---------- | -------------------------------------------------------------- |
-| Django API | [http://localhost](http://localhost)                           |
-| smtp4dev   | [http://localhost:5000](http://localhost:5000)                 |
-| Flower     | [http://localhost:5555/flower/](http://localhost:5555/flower/) |
-| Locust     | [http://localhost:8089](http://localhost:8089)                 |
-
----
-
-#  تست دستی سیستم
-
-ثبت کاربر:
-
-```bash
-curl -X POST http://localhost/api/register/ \
+bash
+curl -X POST http://localhost/register/ \
 -H "Content-Type: application/json" \
 -d '
 {
 "username":"Bahram",
-"email":"devops523@gmail.comm",
+"email":"devops523@gmail.com",
 "password":"12345678"
 }
 '
-```
+The response includes a Task ID.
 
-پاسخ شامل Task ID خواهد بود.
+Example:
 
-مثال:
-
-```json
+json
 {
 "user":"ali",
 "task_id":"xxxxxxxx"
 }
-```
+Check Task status:
 
----
-
-بررسی وضعیت Task:
-
-```bash
-curl http://localhost/api/tasks/<task_id>/
-```
-
-نتیجه:
-
-قبل از اجرا:
+bash
+curl http://localhost/tasks/<task_id>/
+Result before execution:
 
 ```
 PENDING
-```
-
-بعد از موفقیت:
+After success:
 
 ```
 SUCCESS
-```
-
----
-
-#  مشاهده ایمیل
-
-وارد شوید:
+Viewing Emails
+Open:
 
 ```
 http://localhost:5000
-```
+You will see the Welcome email.
 
-ایمیل Welcome را مشاهده خواهید کرد.
-
----
-
-#  مشاهده Taskها با Flower
-
-آدرس:
+Viewing Tasks with Flower
+Open:
 
 ```
 http://localhost:5555/flower/
-```
+In Flower you can see:
 
-در Flower می‌توانید ببینید:
+Workers
 
-* Workerها
-* Taskهای اجرا شده
-* Taskهای موفق
-* Taskهای شکست خورده
-* Queue ها
+Executed tasks
 
----
+Successful tasks
 
-#  Celery Beat
+Failed tasks
 
-این پروژه یک Task زمان‌بندی شده دارد:
+Queues
+
+Celery Beat
+This project has a scheduled task:
 
 ```
 cleanup_old_task_results
-```
+which runs every 60 seconds.
 
-که هر 60 ثانیه اجرا می‌شود.
+View logs:
 
-مشاهده Log:
-
-```bash
+bash
 docker compose logs -f celery-beat celery-worker
-```
-
----
-
-#  Load Testing با Locust
-
-ورود:
+Load Testing with Locust
+Open:
 
 ```
 http://localhost:8089
-```
-
-تنظیم کنید:
+Configure:
 
 ```
-Users:
-100
-
-Spawn Rate:
-10
-```
-
-Locust درخواست‌های ثبت‌نام را ارسال می‌کند و کل مسیر زیر را تست می‌کند:
+Users: 100
+Spawn Rate: 10
+Locust sends registration requests and tests the full path:
 
 ```
 Request
+  ↓
+Django
+  ↓
+PostgreSQL
+  ↓
+Redis
+  ↓
+Celery
+  ↓
+Email
+Project Structure
+```
+django-celery-async-architecture-demo/
+├── src/
+│   ├── manage.py
+│   ├── config/
+│   │   ├── settings.py
+│   │   ├── celery.py
+│   │   ├── urls.py
+│   │   └── wsgi.py
+│   ├── notifications/
+│   │   ├── tasks.py
+│   │   ├── views.py
+│   │   ├── serializers.py
+│   │   └── urls.py
+│   └── jobs/                 # NEW: Task Manager app
+│       ├── models.py
+│       ├── serializers.py
+│       ├── views.py
+│       ├── views_web.py
+│       ├── urls.py
+│       ├── tasks.py
+│       ├── admin.py
+│       ├── tests.py          # 12 automated tests
+│       ├── migrations/
+│       ├── static/jobs/      # Bootstrap, CSS, JS
+│       └── templates/jobs/   # HTML pages
+├── docker/
+│   ├── django/
+│   └── nginx/
+├── docker-compose.yml
+├── requirements.txt
+├── pyproject.toml
+├── locustfile.py
+├── .env.example
+└── README.md
+Running the Tests
+bash
+docker compose exec django python manage.py test jobs -v 2
+Expected output: Ran 12 tests ... OK.
 
- ↓
+The tests use unittest.mock.patch for all outgoing email, so they do not require smtp4dev, Redis, or Celery workers to be running.
+
+API Documentation
+Method	Path	Auth	Description
+POST	/api/auth/login/	No	Obtain access + refresh
+POST	/api/auth/refresh/	No	Refresh access
+GET/POST	/api/tasks/	Yes	List / create tasks
+GET/PUT/PATCH/DELETE	/api/tasks/{id}/	Yes	Retrieve / update / delete a task
+POST	/api/tasks/{id}/complete/	Yes	Mark task as SUCCESS
+POST	/api/tasks/{id}/fail/	Yes	Mark task as FAILED
+All authenticated endpoints expect Authorization: Bearer <access>.
+
+Web UI: /login/, /sign_up/, /tasks-ui/, /tasks-ui/new/.
+
+Sample Output
+After POST /api/tasks/{id}/complete/, the response looks like:
+
+json
+{
+  "id": 3,
+  "title": "Email test task",
+  "description": "Should send real email",
+  "status": "SUCCESS",
+  "created_at": "2026-11-13T11:35:44Z",
+  "finished_at": "2026-11-13T11:36:04Z"
+}
+The reminder task logs:
+
+```
+Sent reminder emails for 1 stale tasks
+Task jobs.tasks.send_reminder_for_stale_tasks[...] succeeded: 'sent 1 reminder emails'
+Educational Concepts
+By studying this project you will learn:
 
 Django
+Django REST Framework
 
- ↓
+API Design
 
-PostgreSQL
+Database Integration
 
- ↓
+Custom Model Methods
 
-Redis
-
- ↓
+Migration Management
 
 Celery
+Async Task
 
- ↓
+Worker
 
-Email
-```
+Broker
 
----
+Result Backend
 
-#  ساختار پروژه
+Beat Scheduler
 
-```
-celery-drf-demo/
+bind=True, autoretry_for, retry with exponential backoff
 
-├── src/
+Redis
+Message Queue
 
-│   ├── manage.py
+Task Distribution
 
-│   ├── config/
+Authentication
+SimpleJWT
 
-│   │   ├── settings.py
+Access / Refresh tokens
 
-│   │   ├── celery.py
+IsAuthenticated permission
 
-│   │   ├── urls.py
+Object-level permission (get_queryset filtering)
 
-│   │   └── wsgi.py
+Production Deployment
+Nginx Reverse Proxy
 
+Gunicorn
 
-│   └── notifications/
+Docker Compose
 
-│       ├── tasks.py
-│       ├── views.py
-│       ├── serializers.py
-│       └── urls.py
+Monitoring
+Flower
 
+Task Tracking
 
-├── docker/
+Testing
+Django APITestCase
 
-│   ├── django/
+unittest.mock.patch for external services
 
-│   └── nginx/
+Locust Load Testing
 
+Automated tests (12)
 
-├── docker-compose.yml
+Optimization
+select_related to avoid N+1 queries
 
-├── requirements.txt
+Production Notes
+This is an educational project.
 
-├── locustfile.py
+For real production the following should be added:
 
-└── .env.example
+HTTPS with SSL
 
-```
+Secrets Management
 
----
+Rate Limiting
 
-#  مفاهیم آموزشی این پروژه
+Prometheus + Grafana
 
-با مطالعه این پروژه مفاهیم زیر را یاد می‌گیرید:
+Central Logging
 
-### Django
+Kubernetes Deployment
 
-* Django REST Framework
-* API Design
-* Database Integration
+AI Usage Disclosure
+Parts of this project were developed with the assistance of an AI coding assistant (Claude). The AI was used for:
 
-### Celery
+Drafting the initial Task model and DRF ViewSet structure
 
-* Async Task
-* Worker
-* Broker
-* Result Backend
-* Beat Scheduler
+Suggesting the 12 test cases and their mock strategy
 
-### Redis
+Reviewing the JWT configuration and Bootstrap layout
 
-* Message Queue
-* Task Distribution
+All AI-generated code was read, understood, tested locally (via python manage.py test and manual API calls), and adapted to the project. The author is responsible for every line of code submitted.
 
-### Production Deployment
-
-* Nginx Reverse Proxy
-* Gunicorn
-* Docker Compose
-
-### Monitoring
-
-* Flower
-* Task Tracking
-
-### Testing
-
-* Locust Load Testing
-* Automated Tests
-
----
-
-# نکات Production
-
-این پروژه آموزشی است.
-
-برای Production واقعی باید موارد زیر اضافه شوند:
-
-* HTTPS با SSL
-* Secrets Management
-* Authentication واقعی
-* Rate Limiting
-* Prometheus + Grafana
-* Logging مرکزی
-* Kubernetes Deployment
-
----
-
-#  Author
-Jamall(Bahram) Mahmoudi
-
+Original Author
+Jamall (Bahram) Mahmoudi
 devops523@gmail.com
 
 Created for learning and demonstrating:
+Django + Celery + Redis + Docker Production Architecture
 
-**Django + Celery + Redis + Docker Production Architecture**
+Extended By
+This project was extended by a student as the final project of the Backend Development with Django course, adding:
 
----
+Task Manager domain model
 
-# ⭐ اگر این پروژه برای شما مفید بود
+JWT authentication
 
-یک Star در GitHub بزنید ⭐
+Async email notifications on task completion/failure
 
+24-hour reminder via Celery Beat
+
+Bootstrap web UI
+
+12 automated tests
+
+If you found this project useful
+Give it a Star on GitHub
